@@ -114,6 +114,9 @@ class ARCPlayground:
         print("\n   KLAVYE KISAYOLLARI:")
         print("      SPACE: Pause/Resume  |  R: Reset  |  Q: Çıkış")
         print("      Z/X: Zoom  |  A: Auto-fit  |  ->: Step")
+        print("      E: Edit Mode (Click CURRENT grid to paint)")
+        print("      H: Heatmap (Show agent activity overlay)")
+
         print("\n   *** Sistem PAUSE modunda başlar - START butonuna tıklayın! ***")
         print("=" * 60)
         print()
@@ -145,6 +148,7 @@ class ARCPlayground:
                 print(f"\n[RESET] Episode {episode_count} sıfırlanıyor...")
                 observation, info = self.env.reset()
                 self.agent.reset()
+                self.viewer.reset_heatmap()  # Reset heatmap
                 # Yeni episode başlat
                 state_info = self.env.get_state_info()
                 self.metrics.start_episode(
@@ -222,6 +226,10 @@ class ARCPlayground:
 
             # Environment'ta adım at
             next_observation, reward, terminated, truncated, step_info = self.env.step(action)
+
+            # Record action for heatmap
+            if 'action_decoded' in step_info:
+                self.viewer.record_action(step_info['action_decoded'])
 
             # Metrics: Step kaydet
             state_info = self.env.get_state_info()

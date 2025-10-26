@@ -59,6 +59,256 @@ ARC_COLORS = {
 }
 
 
+class ColorPalette:
+    """Color palette widget for selecting ARC colors"""
+
+    def __init__(self, x: int, y: int, cell_size: int = 40):
+        self.x = x
+        self.y = y
+        self.cell_size = cell_size
+        self.selected_color = 1  # Default: Blue
+        self.hover_color = None
+
+    def draw(self, screen, font):
+        """Draw the color palette"""
+        # Title
+        title_surface = font.render("COLOR PALETTE", True, (255, 255, 255))
+        screen.blit(title_surface, (self.x, self.y - 30))
+
+        # Draw color cells (2 columns, 5 rows)
+        for color_id in range(10):
+            row = color_id % 5
+            col = color_id // 5
+
+            cell_x = self.x + col * (self.cell_size + 5)
+            cell_y = self.y + row * (self.cell_size + 5)
+
+            # Cell background
+            cell_rect = pygame.Rect(cell_x, cell_y, self.cell_size, self.cell_size)
+            pygame.draw.rect(screen, ARC_COLORS[color_id], cell_rect)
+
+            # Border
+            border_color = (255, 255, 0) if color_id == self.selected_color else (150, 150, 150)
+            border_width = 3 if color_id == self.selected_color else 1
+            pygame.draw.rect(screen, border_color, cell_rect, border_width)
+
+            # Hover effect
+            if color_id == self.hover_color:
+                hover_rect = pygame.Rect(cell_x - 2, cell_y - 2, self.cell_size + 4, self.cell_size + 4)
+                pygame.draw.rect(screen, (255, 255, 255), hover_rect, 1)
+
+            # Color number
+            num_surface = font.render(str(color_id), True, (255, 255, 255))
+            num_rect = num_surface.get_rect(center=(cell_x + self.cell_size // 2, cell_y + self.cell_size // 2))
+
+            # Dark outline for visibility
+            outline_surface = font.render(str(color_id), True, (0, 0, 0))
+            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                screen.blit(outline_surface, (num_rect.x + dx, num_rect.y + dy))
+            screen.blit(num_surface, num_rect)
+
+        # Selected color info
+        info_text = f"Selected: Color {self.selected_color}"
+        info_surface = font.render(info_text, True, (200, 200, 200))
+        screen.blit(info_surface, (self.x, self.y + 5 * (self.cell_size + 5) + 10))
+
+    def handle_event(self, event):
+        """Handle mouse events"""
+        if event.type == pygame.MOUSEMOTION:
+            mouse_x, mouse_y = event.pos
+            self.hover_color = None
+
+            for color_id in range(10):
+                row = color_id % 5
+                col = color_id // 5
+                cell_x = self.x + col * (self.cell_size + 5)
+                cell_y = self.y + row * (self.cell_size + 5)
+                cell_rect = pygame.Rect(cell_x, cell_y, self.cell_size, self.cell_size)
+
+                if cell_rect.collidepoint(mouse_x, mouse_y):
+                    self.hover_color = color_id
+                    break
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # Left click
+                mouse_x, mouse_y = event.pos
+
+                for color_id in range(10):
+                    row = color_id % 5
+                    col = color_id // 5
+                    cell_x = self.x + col * (self.cell_size + 5)
+                    cell_y = self.y + row * (self.cell_size + 5)
+                    cell_rect = pygame.Rect(cell_x, cell_y, self.cell_size, self.cell_size)
+
+                    if cell_rect.collidepoint(mouse_x, mouse_y):
+                        self.selected_color = color_id
+                        return True
+        return False
+
+
+class HeatmapOverlay:
+    """Track and visualize agent's grid modifications"""
+
+    def __init__(self, max_size: int = 30):
+        self.max_size = max_size
+        self.modification_count = np.zeros((max_size, max_size), dtype=np.int32)
+        self.enabled = False  # H tuşu ile toggle
+
+    def record_modification(self, x: int, y: int):
+        """Record a modification at (x, y)"""
+        if 0 <= x < self.max_size and 0 <= y < self.max_size:
+            self.modification_count[x, y] += 1
+
+    def reset(self):
+        """Clear all modification counts"""
+        self.modification_count = np.zeros((self.max_size, self.max_size), dtype=np.int32)
+
+    def draw_heatmap(self, screen, grid_data):
+        """Draw heatmap overlay on grid"""
+        if not self.enabled:
+            return
+
+        grid_x = grid_data['x']
+        grid_y = grid_data['y']
+        cell_size = grid_data['cell_size']
+        height, width = grid_data['shape']
+
+        # Get max count for normalization
+        max_count = np.max(self.modification_count[:height, :width])
+        if max_count == 0:
+            return
+
+        # Draw semi-transparent overlay
+        for i in range(height):
+            for j in range(width):
+                count = self.modification_count[i, j]
+                if count > 0:
+                    # Normalize to 0-255
+                    intensity = int((count / max_count) * 255)
+
+                    # Create color gradient: Blue (cold) -> Red (hot)
+                    if intensity < 128:
+                        # Blue to Yellow
+                        r = int((intensity / 128) * 255)
+                        g = int((intensity / 128) * 255)
+                        b = 255 - int((intensity / 128) * 255)
+                    else:
+                        # Yellow to Red
+                        r = 255
+                        g = 255 - int(((intensity - 128) / 127) * 255)
+                        b = 0
+
+                    # Draw semi-transparent overlay
+                    overlay = pygame.Surface((cell_size, cell_size))
+                    overlay.set_alpha(120)  # Semi-transparent
+                    overlay.fill((r, g, b))
+
+                    cell_x = grid_x + j * cell_size
+                    cell_y = grid_y + i * cell_size
+                    screen.blit(overlay, (cell_x, cell_y))
+
+                    # Draw count number (if count > 1)
+                    if count > 1:
+                        font = pygame.font.Font(None, max(12, cell_size // 2))
+                        count_text = str(count)
+                        text_surface = font.render(count_text, True, (255, 255, 255))
+                        text_rect = text_surface.get_rect(center=(cell_x + cell_size // 2, cell_y + cell_size // 2))
+
+                        # Dark outline for visibility
+                        outline_surface = font.render(count_text, True, (0, 0, 0))
+                        for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                            screen.blit(outline_surface, (text_rect.x + dx, text_rect.y + dy))
+                        screen.blit(text_surface, text_rect)
+
+
+class GridEditor:
+    """Interactive grid editing with mouse"""
+
+    def __init__(self):
+        self.edit_mode = False
+        self.grid_rects = {}  # {grid_type: {'rect': ..., 'cell_rects': ...}}
+        self.hover_cell = None  # (grid_type, x, y)
+
+    def handle_click(self, event, selected_color, current_grid, grid_rects):
+        """Handle mouse click on grid"""
+        if not self.edit_mode:
+            return False
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mouse_x, mouse_y = event.pos
+
+            # Check CURRENT grid only (editable)
+            if 'current' in grid_rects:
+                grid_data = grid_rects['current']
+                grid_x = grid_data['x']
+                grid_y = grid_data['y']
+                cell_size = grid_data['cell_size']
+                height, width = grid_data['shape']
+
+                # Check if click is within grid bounds
+                grid_rect = pygame.Rect(grid_x, grid_y, width * cell_size, height * cell_size)
+                if grid_rect.collidepoint(mouse_x, mouse_y):
+                    # Calculate grid cell
+                    rel_x = mouse_x - grid_x
+                    rel_y = mouse_y - grid_y
+                    cell_x = rel_y // cell_size
+                    cell_y = rel_x // cell_size
+
+                    if 0 <= cell_x < height and 0 <= cell_y < width:
+                        # Modify the grid
+                        current_grid[cell_x, cell_y] = selected_color
+                        return True
+
+        elif event.type == pygame.MOUSEMOTION:
+            # Track hover for visual feedback
+            mouse_x, mouse_y = event.pos
+            self.hover_cell = None
+
+            if 'current' in grid_rects:
+                grid_data = grid_rects['current']
+                grid_x = grid_data['x']
+                grid_y = grid_data['y']
+                cell_size = grid_data['cell_size']
+                height, width = grid_data['shape']
+
+                grid_rect = pygame.Rect(grid_x, grid_y, width * cell_size, height * cell_size)
+                if grid_rect.collidepoint(mouse_x, mouse_y):
+                    rel_x = mouse_x - grid_x
+                    rel_y = mouse_y - grid_y
+                    cell_x = rel_y // cell_size
+                    cell_y = rel_x // cell_size
+
+                    if 0 <= cell_x < height and 0 <= cell_y < width:
+                        self.hover_cell = ('current', cell_x, cell_y)
+
+        return False
+
+    def draw_hover_highlight(self, screen, grid_rects):
+        """Draw highlight on hovered cell"""
+        if self.hover_cell and self.edit_mode:
+            grid_type, cell_x, cell_y = self.hover_cell
+
+            if grid_type in grid_rects:
+                grid_data = grid_rects[grid_type]
+                grid_x = grid_data['x']
+                grid_y = grid_data['y']
+                cell_size = grid_data['cell_size']
+
+                # Draw highlight
+                highlight_x = grid_x + cell_y * cell_size
+                highlight_y = grid_y + cell_x * cell_size
+                highlight_rect = pygame.Rect(highlight_x, highlight_y, cell_size, cell_size)
+
+                # Semi-transparent white overlay
+                overlay = pygame.Surface((cell_size, cell_size))
+                overlay.set_alpha(100)
+                overlay.fill((255, 255, 255))
+                screen.blit(overlay, (highlight_x, highlight_y))
+
+                # Bright border
+                pygame.draw.rect(screen, (255, 255, 0), highlight_rect, 2)
+
+
 class PygameViewer:
     """
     Pygame tabanlı görselleştirme arayüzü
@@ -136,6 +386,13 @@ class PygameViewer:
         self.buttons = []
         self.button_hover = None  # Hangi butonun üzerinde mouse var
         self._create_buttons()  # Butonları oluştur
+
+        # Edit system
+        self.color_palette = ColorPalette(x=20, y=200, cell_size=35)
+        self.grid_editor = GridEditor()
+        self.heatmap_overlay = HeatmapOverlay(max_size=30)  # ARC max grid size
+        self.grid_rects = {}  # Grid position tracking for editor
+        self.current_grid_reference = None  # Reference to current grid for editing
 
         # Colors
         self.bg_color = (30, 30, 30)
@@ -277,6 +534,19 @@ class PygameViewer:
             Control flags dict
         """
         for event in pygame.event.get():
+            # Color palette event'lerini handle et (önce)
+            if self.color_palette.handle_event(event):
+                continue
+
+            # Grid editor event'lerini handle et (color palette'ten sonra)
+            if self.grid_editor.handle_click(
+                event,
+                self.color_palette.selected_color,
+                self.current_grid_reference,  # Will be set during render
+                self.grid_rects
+            ):
+                continue
+
             # Önce buton event'lerini handle et
             for button in self.buttons:
                 if button.handle_event(event):
@@ -359,6 +629,16 @@ class PygameViewer:
                 elif event.key == pygame.K_LEFT:
                     # Previous sample
                     self.prev_sample = True
+
+                elif event.key == pygame.K_e:
+                    # Toggle edit mode
+                    self.grid_editor.edit_mode = not self.grid_editor.edit_mode
+                    print(f"\n[EDIT MODE] {'ENABLED' if self.grid_editor.edit_mode else 'DISABLED'}")
+
+                elif event.key == pygame.K_h:
+                    # Toggle heatmap overlay
+                    self.heatmap_overlay.enabled = not self.heatmap_overlay.enabled
+                    print(f"\n[HEATMAP] {'ENABLED' if self.heatmap_overlay.enabled else 'DISABLED'}")
 
         return {
             'quit': self.should_quit,
@@ -460,11 +740,32 @@ class PygameViewer:
             max_width = max(input_grid.shape[1], current_grid.shape[1], target_grid.shape[1])
             self.current_cell_size = self._calculate_auto_fit_cell_size(max_height, max_width)
 
+        # Set current grid reference for editor
+        self.current_grid_reference = current_grid
+
         # Layout mode'a göre grid'leri çiz
         if self.layout_mode == "horizontal":
             self._draw_grids_horizontal(input_grid, current_grid, target_grid)
         else:
             self._draw_grids_vertical(input_grid, current_grid, target_grid)
+
+        # Heatmap overlay çiz (CURRENT grid üzerine)
+        if 'current' in self.grid_rects:
+            self.heatmap_overlay.draw_heatmap(self.screen, self.grid_rects['current'])
+
+        # Grid editor hover highlight çiz (grid'lerin üstüne)
+        if self.grid_editor.edit_mode:
+            self.grid_editor.draw_hover_highlight(self.screen, self.grid_rects)
+
+        # Color palette çiz (sol tarafta)
+        if self.grid_editor.edit_mode:
+            self.color_palette.draw(self.screen, self.font_small)
+
+        # Edit mode indicator çiz
+        self._draw_edit_mode_indicator()
+
+        # Heatmap indicator çiz
+        self._draw_heatmap_indicator()
 
         # Alt kontrol çubuğu
         self._draw_controls()
@@ -578,6 +879,15 @@ class PygameViewer:
 
                 pygame.draw.rect(self.screen, color, cell_rect)
                 pygame.draw.rect(self.screen, self.border_color, cell_rect, 1)
+
+        # Save grid rect for editor (if this is the CURRENT grid)
+        if label == "CURRENT":
+            self.grid_rects['current'] = {
+                'x': x,
+                'y': y,
+                'cell_size': cell_size,
+                'shape': (grid_height, grid_width)
+            }
 
     def _draw_status_panel(self, x: int, y: int, info: Dict):
         """Sağ taraftaki status panelini çiz"""
@@ -749,6 +1059,58 @@ class PygameViewer:
         value_surface = self.font_small.render(value, True, (100, 255, 100))
         self.screen.blit(value_surface, (x + 150, y))
 
+    def _draw_edit_mode_indicator(self):
+        """Draw edit mode indicator in top-right corner"""
+        if self.grid_editor.edit_mode:
+            # Background panel
+            panel_width = 200
+            panel_height = 80
+            panel_x = self.window_width - panel_width - 20
+            panel_y = 150
+
+            panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+            pygame.draw.rect(self.screen, (50, 150, 50), panel_rect)
+            pygame.draw.rect(self.screen, (100, 255, 100), panel_rect, 2)
+
+            # Title
+            title_text = "EDIT MODE: ON"
+            title_surface = self.font_medium.render(title_text, True, (255, 255, 255))
+            title_rect = title_surface.get_rect(center=(panel_x + panel_width // 2, panel_y + 20))
+            self.screen.blit(title_surface, title_rect)
+
+            # Instructions
+            inst1 = "Click CURRENT grid"
+            inst2 = "Press E to exit"
+            inst1_surface = self.font_tiny.render(inst1, True, (200, 200, 200))
+            inst2_surface = self.font_tiny.render(inst2, True, (200, 200, 200))
+
+            self.screen.blit(inst1_surface, (panel_x + 10, panel_y + 45))
+            self.screen.blit(inst2_surface, (panel_x + 10, panel_y + 60))
+
+    def _draw_heatmap_indicator(self):
+        """Draw heatmap indicator"""
+        if self.heatmap_overlay.enabled:
+            # Small indicator in top-right
+            panel_width = 200
+            panel_height = 60
+            panel_x = self.window_width - panel_width - 20
+            panel_y = 240  # Below edit mode indicator
+
+            panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
+            pygame.draw.rect(self.screen, (150, 50, 50), panel_rect)
+            pygame.draw.rect(self.screen, (255, 100, 100), panel_rect, 2)
+
+            # Title
+            title_text = "HEATMAP: ON"
+            title_surface = self.font_medium.render(title_text, True, (255, 255, 255))
+            title_rect = title_surface.get_rect(center=(panel_x + panel_width // 2, panel_y + 20))
+            self.screen.blit(title_surface, title_rect)
+
+            # Instructions
+            inst = "Press H to hide"
+            inst_surface = self.font_tiny.render(inst, True, (200, 200, 200))
+            self.screen.blit(inst_surface, (panel_x + 10, panel_y + 40))
+
     def _draw_controls(self):
         """Alt kontrol çubuğunu çiz - butonlar ile"""
         y_pos = self.window_height - 100
@@ -802,3 +1164,12 @@ class PygameViewer:
         self.toggle_mode = False
         self.next_sample = False
         self.prev_sample = False
+
+    def record_action(self, action_decoded: tuple):
+        """Record an agent action for heatmap tracking"""
+        x, y, color = action_decoded
+        self.heatmap_overlay.record_modification(x, y)
+
+    def reset_heatmap(self):
+        """Reset heatmap when episode resets"""
+        self.heatmap_overlay.reset()
