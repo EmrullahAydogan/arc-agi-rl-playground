@@ -19,6 +19,7 @@ from src.visualization.pygame_viewer import PygameViewer
 from src.visualization.info_panel import InfoPanel
 from src.visualization.puzzle_browser import PuzzleBrowser
 from src.visualization.episode_history import EpisodeHistoryViewer
+from src.visualization.replay_viewer import ReplayViewer
 
 
 class ARCPlayground:
@@ -100,6 +101,12 @@ class ARCPlayground:
         # Puzzle Browser (lazy - sadece açıldığında oluşturulacak)
         self.puzzle_browser = None
         self.episode_history_viewer = None
+        self.replay_viewer = None
+
+        # Replay mode state
+        self.replay_mode = False
+        self.replay_episode = None
+        self.replay_initial_grid = None
 
         print("[OK] Oyun alanı hazır!")
         print("[INFO] İki pencere açıldı: Grid'ler için ana pencere, bilgiler için info panel")
@@ -180,7 +187,7 @@ class ARCPlayground:
                     print("\n[HISTORY] Episode history açılıyor...")
                     self.episode_history_viewer = EpisodeHistoryViewer(
                         self.episode_recorder,
-                        on_replay_select=None,  # Replay özelliği sonra eklenecek
+                        on_replay_select=self._on_replay_selected,
                         title="Episode History"
                     )
                 else:
@@ -271,6 +278,19 @@ class ARCPlayground:
                 if self.episode_history_viewer and self.episode_history_viewer.is_running():
                     self.episode_history_viewer.mainloop_iteration()
 
+                # Replay viewer güncelle (Tkinter)
+                if self.replay_viewer and self.replay_viewer.is_running():
+                    self.replay_viewer.mainloop_iteration()
+                elif self.replay_mode:
+                    # Replay viewer kapatıldı, replay mode'dan çık
+                    print("\n[REPLAY] Replay viewer kapatıldı, normal mode'a dönülüyor...")
+                    self.replay_mode = False
+                    self.replay_episode = None
+                    self.replay_viewer = None
+                    # Environment'ı reset et
+                    observation, info = self.env.reset()
+                    self.agent.reset()
+
                 continue
 
             # Agent'tan action al
@@ -319,6 +339,23 @@ class ARCPlayground:
             # Episode history viewer güncelle (Tkinter)
             if self.episode_history_viewer and self.episode_history_viewer.is_running():
                 self.episode_history_viewer.mainloop_iteration()
+
+            # Replay viewer güncelle (Tkinter)
+            if self.replay_viewer and self.replay_viewer.is_running():
+                self.replay_viewer.mainloop_iteration()
+            elif self.replay_mode:
+                # Replay viewer kapatıldı, replay mode'dan çık
+                print("\n[REPLAY] Replay viewer kapatıldı, normal mode'a dönülüyor...")
+                self.replay_mode = False
+                self.replay_episode = None
+                self.replay_viewer = None
+                # Environment'ı reset et
+                observation, info = self.env.reset()
+                self.agent.reset()
+
+            # Replay mode active - skip normal game logic
+            if self.replay_mode:
+                continue
 
             # Episode bitti mi?
             if terminated or truncated:
@@ -389,6 +426,8 @@ class ARCPlayground:
             self.puzzle_browser.close()
         if self.episode_history_viewer and self.episode_history_viewer.is_running():
             self.episode_history_viewer.close()
+        if self.replay_viewer and self.replay_viewer.is_running():
+            self.replay_viewer.close()
         print("\n[OK] Oyun alanı kapatıldı. Görüşmek üzere!")
 
     def _on_puzzle_selected(self, puzzle_id: str, dataset: str):
@@ -434,6 +473,74 @@ class ARCPlayground:
         print(f"   Dataset: {dataset}")
         print(f"   Train Samples: {state_info['num_train_samples']}")
         print(f"   Test Samples: {state_info['num_test_samples']}")
+
+    def _on_replay_selected(self, episode):
+        """Episode history'den replay seçildiğinde çağrılır"""
+        print(f"\n[REPLAY] Episode {episode.episode_id} replay başlatılıyor...")
+        print(f"   Puzzle: {episode.puzzle_id}")
+        print(f"   Mode: {episode.mode}")
+        print(f"   Steps: {episode.total_steps}")
+
+        # Puzzle'ı yükle
+        puzzle_data = self.loader.get_puzzle(episode.puzzle_id, episode.dataset)
+        if puzzle_data is None:
+            print(f"[ERROR] Puzzle bulunamadı: {episode.puzzle_id}")
+            return
+
+        # Episode bilgilerini sakla
+        self.replay_episode = episode
+        self.replay_mode = True
+
+        # Environment'ı aynı puzzle ile ayarla
+        self.env = ARCEnvironment(
+            puzzle_data=puzzle_data,
+            task_index=0,
+            max_steps=self.max_steps
+        )
+
+        # Doğru mode ve sample'a geç
+        if episode.mode == 'test':
+            self.env.switch_mode()
+        else:
+            # Train mode'da doğru sample'a geç
+            for _ in range(episode.sample_index):
+                self.env.next_sample()
+
+        # Initial state
+        observation, info = self.env.reset()
+        state_info = self.env.get_state_info()
+        self.replay_initial_grid = state_info['current_grid'].copy()
+
+        # Replay viewer aç
+        if self.replay_viewer is None or not self.replay_viewer.is_running():
+            self.replay_viewer = ReplayViewer(
+                episode,
+                on_step_change=self._on_replay_step,
+                title=f"Replay - Episode {episode.episode_id}"
+            )
+
+        print(f"[REPLAY] Replay viewer açıldı")
+
+    def _on_replay_step(self, step_index, grid_state, action, reward, accuracy):
+        """Replay viewer'dan step değiştiğinde çağrılır"""
+        import numpy as np
+
+        if step_index == 0:
+            # Initial state
+            self.env.current_grid = self.replay_initial_grid.copy()
+        elif grid_state is not None:
+            # Update grid from recorded state
+            self.env.current_grid = np.array(grid_state)
+
+        # Render the replay state
+        state_info = self.env.get_state_info()
+        state_info['steps'] = step_index
+        state_info['last_reward'] = reward
+        state_info['total_reward'] = sum(self.replay_episode.rewards[:step_index]) if step_index > 0 else 0.0
+        state_info['is_solved'] = False  # Replay mode
+        state_info['done'] = step_index >= self.replay_episode.total_steps
+
+        self._render(state_info)
 
     def _render(self, state_info: dict):
         """Mevcut durumu görselleştir"""
