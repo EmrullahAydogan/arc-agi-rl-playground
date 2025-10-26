@@ -516,15 +516,17 @@ class PygameViewer:
         self.buttons.append(self.heatmap_btn)
         start_x += 150 + button_spacing
 
-        # BROWSE PUZZLES butonu
+        # BROWSE PUZZLES butonu - Sağ üst köşe
+        browse_btn_width = 180
+        browse_btn_x = self.window_width - browse_btn_width - 20
+        browse_btn_y = 20  # Üst kısımda
         self.buttons.append(Button(
-            start_x, button_y2, 180, button_height,
+            browse_btn_x, browse_btn_y, browse_btn_width, button_height,
             "BROWSE PUZZLES",
             self._open_browser,
             bg_color=(100, 100, 200),
             hover_color=(120, 120, 220)
         ))
-        start_x += 180 + button_spacing
 
     def _toggle_pause(self):
         """START/PAUSE toggle"""
