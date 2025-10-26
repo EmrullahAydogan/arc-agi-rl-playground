@@ -12,11 +12,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.utils.data_loader import ARCDataLoader
 from src.utils.metrics_tracker import MetricsTracker
+from src.utils.episode_recorder import EpisodeRecorder
 from src.environment.arc_env import ARCEnvironment
 from src.agents.random_agent import RandomAgent
 from src.visualization.pygame_viewer import PygameViewer
 from src.visualization.info_panel import InfoPanel
 from src.visualization.puzzle_browser import PuzzleBrowser
+from src.visualization.episode_history import EpisodeHistoryViewer
 
 
 class ARCPlayground:
@@ -91,8 +93,13 @@ class ARCPlayground:
         print("[SETUP] Metrics tracker oluşturuluyor...")
         self.metrics = MetricsTracker()
 
+        # Episode Recorder oluştur
+        print("[SETUP] Episode recorder oluşturuluyor...")
+        self.episode_recorder = EpisodeRecorder(max_episodes=500)
+
         # Puzzle Browser (lazy - sadece açıldığında oluşturulacak)
         self.puzzle_browser = None
+        self.episode_history_viewer = None
 
         print("[OK] Oyun alanı hazır!")
         print("[INFO] İki pencere açıldı: Grid'ler için ana pencere, bilgiler için info panel")
@@ -136,6 +143,14 @@ class ARCPlayground:
             sample_index=state_info['train_sample_index']
         )
 
+        # Episode recording başlat
+        self.episode_recorder.start_episode(
+            puzzle_id=self.puzzle_id,
+            dataset=self.dataset,
+            mode=state_info['mode'],
+            sample_index=state_info['train_sample_index']
+        )
+
         running = True
         episode_count = 0
 
@@ -157,6 +172,20 @@ class ARCPlayground:
                         on_puzzle_select=self._on_puzzle_selected,
                         title=f"ARC Puzzle Browser - {self.dataset}"
                     )
+                self.viewer.reset_control_flags()
+
+            # Episode history viewer açma
+            if controls.get('open_history', False):
+                if self.episode_history_viewer is None or not self.episode_history_viewer.is_running():
+                    print("\n[HISTORY] Episode history açılıyor...")
+                    self.episode_history_viewer = EpisodeHistoryViewer(
+                        self.episode_recorder,
+                        on_replay_select=None,  # Replay özelliği sonra eklenecek
+                        title="Episode History"
+                    )
+                else:
+                    # Zaten açık, refresh et
+                    self.episode_history_viewer.refresh()
                 self.viewer.reset_control_flags()
 
             if controls['reset']:
@@ -238,6 +267,10 @@ class ARCPlayground:
                 if self.puzzle_browser and self.puzzle_browser.is_running():
                     self.puzzle_browser.mainloop_iteration()
 
+                # Episode history viewer güncelle (Tkinter)
+                if self.episode_history_viewer and self.episode_history_viewer.is_running():
+                    self.episode_history_viewer.mainloop_iteration()
+
                 continue
 
             # Agent'tan action al
@@ -261,6 +294,14 @@ class ARCPlayground:
             accuracy = correct_pixels / total_pixels
             self.metrics.record_step(reward, accuracy)
 
+            # Episode recorder: Step kaydet
+            self.episode_recorder.record_step(
+                action=action,
+                reward=reward,
+                accuracy=accuracy,
+                grid_state=state_info['current_grid'].tolist()
+            )
+
             # Agent'ı güncelle
             self.agent.update(observation, action, reward, next_observation, terminated or truncated, step_info)
 
@@ -275,10 +316,17 @@ class ARCPlayground:
             if self.puzzle_browser and self.puzzle_browser.is_running():
                 self.puzzle_browser.mainloop_iteration()
 
+            # Episode history viewer güncelle (Tkinter)
+            if self.episode_history_viewer and self.episode_history_viewer.is_running():
+                self.episode_history_viewer.mainloop_iteration()
+
             # Episode bitti mi?
             if terminated or truncated:
                 # Metrics: Episode'u bitir
                 self.metrics.end_episode(is_solved=terminated, final_accuracy=accuracy)
+
+                # Episode recorder: Episode'u bitir
+                self.episode_recorder.end_episode(is_solved=terminated, final_accuracy=accuracy)
 
                 episode_count += 1
 
@@ -315,6 +363,18 @@ class ARCPlayground:
                     mode=state_info['mode'],
                     sample_index=state_info['train_sample_index']
                 )
+
+                # Yeni episode recorder başlat
+                self.episode_recorder.start_episode(
+                    puzzle_id=self.puzzle_id,
+                    dataset=self.dataset,
+                    mode=state_info['mode'],
+                    sample_index=state_info['train_sample_index']
+                )
+
+                # Episode history viewer'ı güncelle
+                if self.episode_history_viewer and self.episode_history_viewer.is_running():
+                    self.episode_history_viewer.refresh()
             else:
                 observation = next_observation
 
@@ -327,6 +387,8 @@ class ARCPlayground:
             self.info_panel.close()
         if self.puzzle_browser and self.puzzle_browser.is_running():
             self.puzzle_browser.close()
+        if self.episode_history_viewer and self.episode_history_viewer.is_running():
+            self.episode_history_viewer.close()
         print("\n[OK] Oyun alanı kapatıldı. Görüşmek üzere!")
 
     def _on_puzzle_selected(self, puzzle_id: str, dataset: str):

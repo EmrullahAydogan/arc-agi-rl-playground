@@ -382,6 +382,7 @@ class PygameViewer:
         self.next_sample = False  # Sonraki sample
         self.prev_sample = False  # Önceki sample
         self.open_browser_flag = False  # Puzzle browser aç
+        self.open_history_flag = False  # Episode history aç
 
         # Button system
         self.buttons = []
@@ -516,16 +517,30 @@ class PygameViewer:
         self.buttons.append(self.heatmap_btn)
         start_x += 150 + button_spacing
 
-        # BROWSE PUZZLES butonu - Sağ üst köşe
+        # Top right buttons - History and Browse
+        button_y_top = 20
+        button_spacing_top = 10
+
+        # BROWSE PUZZLES butonu - Sağ üst köşe (en sağda)
         browse_btn_width = 180
         browse_btn_x = self.window_width - browse_btn_width - 20
-        browse_btn_y = 20  # Üst kısımda
         self.buttons.append(Button(
-            browse_btn_x, browse_btn_y, browse_btn_width, button_height,
+            browse_btn_x, button_y_top, browse_btn_width, button_height,
             "BROWSE PUZZLES",
             self._open_browser,
             bg_color=(100, 100, 200),
             hover_color=(120, 120, 220)
+        ))
+
+        # HISTORY butonu - BROWSE butonunun solunda
+        history_btn_width = 150
+        history_btn_x = browse_btn_x - history_btn_width - button_spacing_top
+        self.buttons.append(Button(
+            history_btn_x, button_y_top, history_btn_width, button_height,
+            "HISTORY",
+            self._open_history,
+            bg_color=(200, 100, 100),
+            hover_color=(220, 120, 120)
         ))
 
     def _toggle_pause(self):
@@ -603,6 +618,11 @@ class PygameViewer:
         """Open puzzle browser"""
         self.open_browser_flag = True
         print("\n[BROWSER] Opening puzzle browser...")
+
+    def _open_history(self):
+        """Open episode history"""
+        self.open_history_flag = True
+        print("\n[HISTORY] Opening episode history...")
 
     def handle_events(self, current_grid=None) -> Dict[str, bool]:
         """
@@ -733,7 +753,8 @@ class PygameViewer:
             'toggle_mode': self.toggle_mode,
             'next_sample': self.next_sample,
             'prev_sample': self.prev_sample,
-            'open_browser': self.open_browser_flag
+            'open_browser': self.open_browser_flag,
+            'open_history': self.open_history_flag
         }
 
     def _zoom_in(self):
@@ -1251,6 +1272,7 @@ class PygameViewer:
         self.next_sample = False
         self.prev_sample = False
         self.open_browser_flag = False
+        self.open_history_flag = False
 
     def record_action(self, action_decoded: tuple):
         """Record an agent action for heatmap tracking"""
