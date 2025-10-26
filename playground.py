@@ -16,6 +16,7 @@ from src.environment.arc_env import ARCEnvironment
 from src.agents.random_agent import RandomAgent
 from src.visualization.pygame_viewer import PygameViewer
 from src.visualization.info_panel import InfoPanel
+from src.visualization.puzzle_browser import PuzzleBrowser
 
 
 class ARCPlayground:
@@ -90,6 +91,9 @@ class ARCPlayground:
         print("[SETUP] Metrics tracker oluşturuluyor...")
         self.metrics = MetricsTracker()
 
+        # Puzzle Browser (lazy - sadece açıldığında oluşturulacak)
+        self.puzzle_browser = None
+
         print("[OK] Oyun alanı hazır!")
         print("[INFO] İki pencere açıldı: Grid'ler için ana pencere, bilgiler için info panel")
         print("[INFO] Info panelini ikinci monitörünüze sürükleyebilirsiniz\n")
@@ -143,6 +147,17 @@ class ARCPlayground:
                 print("\n[EXIT] Çıkılıyor...")
                 running = False
                 break
+
+            # Puzzle browser açma
+            if controls.get('open_browser', False):
+                if self.puzzle_browser is None or not self.puzzle_browser.is_running():
+                    print("\n[BROWSER] Puzzle browser açılıyor...")
+                    self.puzzle_browser = PuzzleBrowser(
+                        self.loader,
+                        on_puzzle_select=self._on_puzzle_selected,
+                        title=f"ARC Puzzle Browser - {self.dataset}"
+                    )
+                self.viewer.reset_control_flags()
 
             if controls['reset']:
                 print(f"\n[RESET] Episode {episode_count} sıfırlanıyor...")
@@ -219,6 +234,10 @@ class ARCPlayground:
                 if self.info_panel.is_running():
                     self.info_panel.mainloop_iteration()
 
+                # Puzzle browser güncelle (Tkinter)
+                if self.puzzle_browser and self.puzzle_browser.is_running():
+                    self.puzzle_browser.mainloop_iteration()
+
                 continue
 
             # Agent'tan action al
@@ -251,6 +270,10 @@ class ARCPlayground:
             # Info panel güncelle (Tkinter)
             if self.info_panel.is_running():
                 self.info_panel.mainloop_iteration()
+
+            # Puzzle browser güncelle (Tkinter)
+            if self.puzzle_browser and self.puzzle_browser.is_running():
+                self.puzzle_browser.mainloop_iteration()
 
             # Episode bitti mi?
             if terminated or truncated:
@@ -302,7 +325,53 @@ class ARCPlayground:
         self.viewer.close()
         if self.info_panel.is_running():
             self.info_panel.close()
+        if self.puzzle_browser and self.puzzle_browser.is_running():
+            self.puzzle_browser.close()
         print("\n[OK] Oyun alanı kapatıldı. Görüşmek üzere!")
+
+    def _on_puzzle_selected(self, puzzle_id: str, dataset: str):
+        """Puzzle browser'dan puzzle seçildiğinde çağrılır"""
+        print(f"\n[PUZZLE CHANGE] Yeni puzzle yükleniyor: {puzzle_id} ({dataset})")
+
+        # Puzzle data'yı yükle
+        puzzle_data = self.loader.get_puzzle(puzzle_id, dataset)
+        if puzzle_data is None:
+            print(f"[ERROR] Puzzle yüklenemedi: {puzzle_id}")
+            return
+
+        # Mevcut environment'ı kapat ve yenisini oluştur
+        self.puzzle_id = puzzle_id
+        self.dataset = dataset
+
+        self.env = ARCEnvironment(
+            puzzle_data=puzzle_data,
+            task_index=0,
+            max_steps=self.max_steps
+        )
+
+        # Agent'ı sıfırla
+        self.agent.reset()
+
+        # Viewer'ı sıfırla
+        self.viewer.reset_heatmap()
+
+        # Metrics'i sıfırla
+        self.metrics = MetricsTracker()
+
+        # Environment'ı reset et
+        observation, info = self.env.reset()
+
+        # Episode başlat
+        state_info = self.env.get_state_info()
+        self.metrics.start_episode(
+            mode=state_info['mode'],
+            sample_index=state_info['train_sample_index']
+        )
+
+        print(f"[PUZZLE CHANGE] Puzzle değiştirildi: {puzzle_id}")
+        print(f"   Dataset: {dataset}")
+        print(f"   Train Samples: {state_info['num_train_samples']}")
+        print(f"   Test Samples: {state_info['num_test_samples']}")
 
     def _render(self, state_info: dict):
         """Mevcut durumu görselleştir"""

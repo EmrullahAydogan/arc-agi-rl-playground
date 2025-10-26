@@ -381,6 +381,7 @@ class PygameViewer:
         self.toggle_mode = False  # Mode değiştir (Train ↔ Test)
         self.next_sample = False  # Sonraki sample
         self.prev_sample = False  # Önceki sample
+        self.open_browser_flag = False  # Puzzle browser aç
 
         # Button system
         self.buttons = []
@@ -515,6 +516,16 @@ class PygameViewer:
         self.buttons.append(self.heatmap_btn)
         start_x += 150 + button_spacing
 
+        # BROWSE PUZZLES butonu
+        self.buttons.append(Button(
+            start_x, button_y2, 180, button_height,
+            "BROWSE PUZZLES",
+            self._open_browser,
+            bg_color=(100, 100, 200),
+            hover_color=(120, 120, 220)
+        ))
+        start_x += 180 + button_spacing
+
     def _toggle_pause(self):
         """START/PAUSE toggle"""
         self.paused = not self.paused
@@ -585,6 +596,11 @@ class PygameViewer:
             self.heatmap_btn.hover_color = (100, 100, 100)
 
         print(f"\n[HEATMAP] {'ENABLED' if self.heatmap_overlay.enabled else 'DISABLED'}")
+
+    def _open_browser(self):
+        """Open puzzle browser"""
+        self.open_browser_flag = True
+        print("\n[BROWSER] Opening puzzle browser...")
 
     def handle_events(self, current_grid=None) -> Dict[str, bool]:
         """
@@ -714,7 +730,8 @@ class PygameViewer:
             'step': self.step_mode,
             'toggle_mode': self.toggle_mode,
             'next_sample': self.next_sample,
-            'prev_sample': self.prev_sample
+            'prev_sample': self.prev_sample,
+            'open_browser': self.open_browser_flag
         }
 
     def _zoom_in(self):
@@ -1231,6 +1248,7 @@ class PygameViewer:
         self.toggle_mode = False
         self.next_sample = False
         self.prev_sample = False
+        self.open_browser_flag = False
 
     def record_action(self, action_decoded: tuple):
         """Record an agent action for heatmap tracking"""
