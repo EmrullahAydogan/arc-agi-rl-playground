@@ -54,8 +54,8 @@ Interactive training environment for reinforcement learning agents on ARC-AGI pu
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/arc_prize_2025_RL.git
-cd arc_prize_2025_RL
+git clone https://github.com/EmrullahAydogan/arc-agi-rl-playground.git
+cd arc-agi-rl-playground
 ```
 
 ### 2. Create Virtual Environment
