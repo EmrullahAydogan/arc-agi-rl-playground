@@ -136,8 +136,8 @@ class ARCPlayground:
         episode_count = 0
 
         while running:
-            # Event handling
-            controls = self.viewer.handle_events()
+            # Event handling (pass current grid reference for editing)
+            controls = self.viewer.handle_events(current_grid=self.env.current_grid)
 
             if controls['quit']:
                 print("\n[EXIT] Çıkılıyor...")

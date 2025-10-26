@@ -402,14 +402,16 @@ class PygameViewer:
 
     def _create_buttons(self):
         """Kontrol butonlarını oluştur"""
-        button_y = self.window_height - 80
-        button_height = 40
+        button_height = 35
         button_spacing = 10
+
+        # İlk satır (üst) - Control butonları
+        button_y1 = self.window_height - 85
         start_x = 20
 
         # START/PAUSE butonu
         self.start_pause_btn = Button(
-            start_x, button_y, 120, button_height,
+            start_x, button_y1, 120, button_height,
             "> START" if self.paused else "|| PAUSE",
             self._toggle_pause,
             bg_color=(46, 204, 64) if self.paused else (255, 200, 0),
@@ -420,7 +422,7 @@ class PygameViewer:
 
         # RESET butonu
         self.buttons.append(Button(
-            start_x, button_y, 100, button_height,
+            start_x, button_y1, 100, button_height,
             "RESET",
             self._reset,
             bg_color=(255, 100, 100),
@@ -430,7 +432,7 @@ class PygameViewer:
 
         # MODE toggle butonu
         self.buttons.append(Button(
-            start_x, button_y, 140, button_height,
+            start_x, button_y1, 140, button_height,
             "<> MODE",
             self._toggle_mode_btn,
             bg_color=(100, 150, 255),
@@ -440,7 +442,7 @@ class PygameViewer:
 
         # PREV SAMPLE butonu
         self.buttons.append(Button(
-            start_x, button_y, 100, button_height,
+            start_x, button_y1, 100, button_height,
             "< PREV",
             self._prev_sample_btn,
             bg_color=(150, 100, 255),
@@ -450,7 +452,7 @@ class PygameViewer:
 
         # NEXT SAMPLE butonu
         self.buttons.append(Button(
-            start_x, button_y, 100, button_height,
+            start_x, button_y1, 100, button_height,
             "NEXT >",
             self._next_sample_btn,
             bg_color=(150, 100, 255),
@@ -460,7 +462,7 @@ class PygameViewer:
 
         # SPEED - butonu
         self.buttons.append(Button(
-            start_x, button_y, 80, button_height,
+            start_x, button_y1, 80, button_height,
             "SPEED -",
             self._decrease_speed,
             bg_color=(255, 150, 50),
@@ -470,7 +472,7 @@ class PygameViewer:
 
         # SPEED + butonu
         self.buttons.append(Button(
-            start_x, button_y, 80, button_height,
+            start_x, button_y1, 80, button_height,
             "SPEED +",
             self._increase_speed,
             bg_color=(255, 150, 50),
@@ -480,12 +482,38 @@ class PygameViewer:
 
         # LAYOUT toggle butonu
         self.buttons.append(Button(
-            start_x, button_y, 100, button_height,
+            start_x, button_y1, 100, button_height,
             "LAYOUT",
             self._toggle_layout_btn,
             bg_color=(200, 100, 200),
             hover_color=(220, 120, 220)
         ))
+
+        # İkinci satır (alt) - Edit/Visual butonları
+        button_y2 = self.window_height - 45
+        start_x = 20
+
+        # EDIT MODE butonu
+        self.edit_mode_btn = Button(
+            start_x, button_y2, 150, button_height,
+            "EDIT: OFF",
+            self._toggle_edit_mode,
+            bg_color=(70, 70, 70),
+            hover_color=(100, 100, 100)
+        )
+        self.buttons.append(self.edit_mode_btn)
+        start_x += 150 + button_spacing
+
+        # HEATMAP butonu
+        self.heatmap_btn = Button(
+            start_x, button_y2, 150, button_height,
+            "HEATMAP: OFF",
+            self._toggle_heatmap,
+            bg_color=(70, 70, 70),
+            hover_color=(100, 100, 100)
+        )
+        self.buttons.append(self.heatmap_btn)
+        start_x += 150 + button_spacing
 
     def _toggle_pause(self):
         """START/PAUSE toggle"""
@@ -526,23 +554,62 @@ class PygameViewer:
         else:
             self.layout_mode = "horizontal"
 
-    def handle_events(self) -> Dict[str, bool]:
+    def _toggle_edit_mode(self):
+        """EDIT MODE toggle"""
+        self.grid_editor.edit_mode = not self.grid_editor.edit_mode
+
+        # Buton tekstini ve rengini güncelle
+        if self.grid_editor.edit_mode:
+            self.edit_mode_btn.text = "EDIT: ON"
+            self.edit_mode_btn.bg_color = (50, 150, 50)
+            self.edit_mode_btn.hover_color = (60, 180, 60)
+        else:
+            self.edit_mode_btn.text = "EDIT: OFF"
+            self.edit_mode_btn.bg_color = (70, 70, 70)
+            self.edit_mode_btn.hover_color = (100, 100, 100)
+
+        print(f"\n[EDIT MODE] {'ENABLED' if self.grid_editor.edit_mode else 'DISABLED'}")
+
+    def _toggle_heatmap(self):
+        """HEATMAP toggle"""
+        self.heatmap_overlay.enabled = not self.heatmap_overlay.enabled
+
+        # Buton tekstini ve rengini güncelle
+        if self.heatmap_overlay.enabled:
+            self.heatmap_btn.text = "HEATMAP: ON"
+            self.heatmap_btn.bg_color = (150, 50, 50)
+            self.heatmap_btn.hover_color = (180, 60, 60)
+        else:
+            self.heatmap_btn.text = "HEATMAP: OFF"
+            self.heatmap_btn.bg_color = (70, 70, 70)
+            self.heatmap_btn.hover_color = (100, 100, 100)
+
+        print(f"\n[HEATMAP] {'ENABLED' if self.heatmap_overlay.enabled else 'DISABLED'}")
+
+    def handle_events(self, current_grid=None) -> Dict[str, bool]:
         """
         Pygame event'lerini işle
+
+        Args:
+            current_grid: Reference to the current grid for editing
 
         Returns:
             Control flags dict
         """
+        # Update current grid reference
+        if current_grid is not None:
+            self.current_grid_reference = current_grid
+
         for event in pygame.event.get():
             # Color palette event'lerini handle et (önce)
             if self.color_palette.handle_event(event):
                 continue
 
             # Grid editor event'lerini handle et (color palette'ten sonra)
-            if self.grid_editor.handle_click(
+            if self.current_grid_reference is not None and self.grid_editor.handle_click(
                 event,
                 self.color_palette.selected_color,
-                self.current_grid_reference,  # Will be set during render
+                self.current_grid_reference,
                 self.grid_rects
             ):
                 continue
