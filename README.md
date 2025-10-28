@@ -4,6 +4,23 @@ Interactive training environment for reinforcement learning agents on ARC-AGI pu
 
 ## ✨ Features
 
+### 🎓 Human-in-the-Loop Training (NEW!)
+**Teach the AI by demonstrating puzzle solutions!**
+
+Instead of relying on LLMs (which struggle with ARC-AGI-2), **YOU** become the teacher:
+- **Record demonstrations**: Solve puzzles manually using Edit Mode
+- **Train AI from demos**: Imitation Learning (Behavioral Cloning)
+- **Deploy autonomously**: Trained agent solves puzzles without LLMs!
+
+**Why this approach works:**
+- ✅ LLMs fail on ARC-AGI-2 (GPT-4: ~5%, Claude: ~8%, o1: ~25%)
+- ✅ Human expertise > LLM guessing
+- ✅ Zero API costs
+- ✅ Fast inference (milliseconds, not seconds)
+- ✅ Privacy-preserving (no external API calls)
+
+See **[HUMAN_TEACHING.md](HUMAN_TEACHING.md)** for complete guide!
+
 ### Multi-Window System
 The playground features **five independent windows** for a comprehensive training and analysis experience:
 
@@ -144,7 +161,34 @@ Download the ARC dataset and place it in the `arc-prize-2025/` directory:
 
 ## Usage
 
-### Basic Usage
+### 🎓 Human Teaching Workflow (Recommended!)
+
+**Step 1: Record Demonstrations**
+```bash
+python demo_playground.py
+```
+- Press `E` to enable Edit Mode
+- Select colors and paint the CURRENT grid
+- Solve 10-50 puzzles to build your dataset
+
+**Step 2: Train Imitation Agent**
+```bash
+python train_imitation.py --epochs 100
+```
+- Trains AI from your demonstrations
+- Takes 5-10 minutes for 100 epochs
+- Best model saved automatically
+
+**Step 3: Deploy Autonomously (Coming Soon)**
+```bash
+python playground.py --agent imitation
+```
+
+See **[HUMAN_TEACHING.md](HUMAN_TEACHING.md)** for detailed guide!
+
+---
+
+### Basic Usage (Random Agent)
 
 Start with a random puzzle:
 ```bash
@@ -311,18 +355,25 @@ arc_prize_2025_RL/
 │   ├── visualization/
 │   │   ├── pygame_viewer.py          # Main visualization window
 │   │   ├── info_panel.py             # Metrics/info panel (Tkinter)
-│   │   ├── puzzle_browser.py         # Puzzle browser window (NEW)
-│   │   ├── episode_history.py        # Episode history viewer (NEW)
-│   │   └── replay_viewer.py          # Replay control panel (NEW)
+│   │   ├── puzzle_browser.py         # Puzzle browser window
+│   │   ├── episode_history.py        # Episode history viewer
+│   │   └── replay_viewer.py          # Replay control panel
 │   ├── agents/
 │   │   ├── base_agent.py             # Agent interface
-│   │   └── random_agent.py           # Example random agent
+│   │   ├── random_agent.py           # Example random agent
+│   │   └── imitation_agent.py        # Imitation learning agent (NEW!)
 │   └── utils/
 │       ├── data_loader.py            # ARC data loader
 │       ├── metrics_tracker.py        # Performance tracking
-│       └── episode_recorder.py       # Episode recording (NEW)
+│       ├── episode_recorder.py       # Episode recording
+│       ├── demonstration_buffer.py   # Human demo storage (NEW!)
+│       ├── checkpoint_manager.py     # Model checkpointing
+│       └── experience_buffer.py      # RL experience buffers
 ├── arc-prize-2025/                   # ARC dataset files
 ├── playground.py                     # Main entry point
+├── demo_playground.py                # Human teaching interface (NEW!)
+├── train_imitation.py                # Train from demonstrations (NEW!)
+├── HUMAN_TEACHING.md                 # Teaching guide (NEW!)
 ├── requirements.txt                  # Python dependencies
 ├── .gitignore                        # Git ignore rules
 ├── LICENSE                           # MIT License
@@ -493,24 +544,40 @@ sample_metrics = metrics.get_sample_metrics(sample_index=0)
 - [x] Color palette
 - [x] Button-based controls
 
-### Phase 3: Agent Development (Next)
+### Phase 3: Human-in-the-Loop Training ✅
+- [x] Demonstration recording system
+- [x] DemonstrationBuffer with save/load
+- [x] Imitation Learning Agent (CNN + Behavioral Cloning)
+- [x] Training pipeline from demonstrations
+- [x] Demo playground interface
+- [x] Comprehensive teaching guide
+
+### Phase 4: Agent Development (Next)
+- [ ] Deploy imitation agent in playground.py
 - [ ] DQN agent implementation
 - [ ] PPO agent implementation
-- [ ] A2C agent implementation
-- [ ] Custom neural network architectures
-- [ ] Hyperparameter tuning interface
-
-### Phase 4: Advanced Features (Future)
-- [ ] Multi-puzzle training
+- [ ] Hybrid: Imitation → RL fine-tuning
 - [ ] Curriculum learning
+
+### Phase 5: Advanced Features (Future)
+- [ ] Multi-puzzle training
+- [ ] Meta-learning (MAML)
+- [ ] Transformer-based policies
 - [ ] Action space extensions (transformations, patterns)
-- [ ] Custom reward shaping
-- [ ] Model checkpointing and loading
 - [ ] Experiment tracking integration
 - [ ] Multi-agent comparison
-- [ ] Distributed training support
 
 ## Tips & Best Practices
+
+### For Human Teaching 🎓
+- **Start simple**: Begin with easy puzzles (simple transformations)
+- **Quality > Quantity**: 10 perfect demos beats 100 sloppy ones
+- **Be consistent**: Solve similar puzzles the same way
+- **Think before acting**: Fewer steps = better demonstrations
+- **Diversify**: Cover different puzzle types (symmetry, colors, patterns)
+- **Aim for 50+ demos**: More demonstrations = better AI performance
+- **Train progressively**: 20 demos → train → 50 demos → train → 100 demos
+- **Review your data**: Check `demonstrations_summary.json` regularly
 
 ### For Training
 - Start with simple puzzles to verify your agent works
@@ -532,6 +599,7 @@ sample_metrics = metrics.get_sample_metrics(sample_index=0)
 - Run multiple instances for parallel training
 - Use evaluation dataset for final testing
 - Save episode history regularly
+- GPU recommended for imitation training (--device cuda)
 
 ## Screenshots
 
